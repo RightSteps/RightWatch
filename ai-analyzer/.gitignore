@@ -9,3 +9,5 @@ node_modules/
 dist/
 build/
 coverage/
+n8n-workflow-guide.md
+DEPLOY.md

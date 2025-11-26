@@ -1,0 +1,18 @@
+{
+  "name": "ai-analyzer",
+  "version": "1.0.0",
+  "description": "AI-powered log analyzer that detects issues from SigNoz",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "axios": "^1.6.2",
+    "openai": "^4.20.1",
+    "winston": "^3.11.0",
+    "@clickhouse/client": "^0.2.5"
+  }
+}

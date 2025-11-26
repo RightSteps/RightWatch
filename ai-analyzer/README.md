@@ -1,0 +1,364 @@
+# AI Analyzer Service
+
+Intelligent monitoring service that analyzes application logs from SigNoz using AI and automatically creates GitHub issues for critical problems.
+
+## Features
+
+- ✅ Polls SigNoz for error logs every 5 minutes (configurable)
+- ✅ AI-powered log analysis using OpenAI GPT-4
+- ✅ Intelligent issue detection and severity classification
+- ✅ Duplicate detection to prevent spam
+- ✅ Automatic GitHub issue creation via GitHub Service
+- ✅ Service metrics analysis (latency, error rates)
+- ✅ Comprehensive logging and error handling
+
+## How It Works
+
+```
+┌──────────────────┐
+│     SigNoz       │ (stores logs, metrics, traces)
+└────────┬─────────┘
+         │ Poll every 5 min
+         ↓
+┌──────────────────┐
+│  AI Analyzer     │
+│  1. Fetch logs   │
+│  2. AI analysis  │
+│  3. Detect issue │
+└────────┬─────────┘
+         │ HTTP POST
+         ↓
+┌──────────────────┐
+│ GitHub Service   │ (creates issue)
+└────────┬─────────┘
+         │ Webhook
+         ↓
+┌──────────────────┐
+│  n8n Workflow    │ (suggests solution)
+└──────────────────┘
+```
+
+## Installation
+
+```bash
+cd ai-analyzer
+npm install
+cp .env.example .env
+```
+
+## Configuration
+
+Edit `.env`:
+
+```env
+# OpenAI
+OPENAI_API_KEY=sk-proj-your-key
+AI_MODEL=gpt-4-turbo-preview
+
+# SigNoz
+SIGNOZ_URL=http://localhost:3301
+SERVICE_NAME=rightstep-app
+
+# GitHub Service
+GITHUB_SERVICE_URL=http://localhost:3001
+
+# Repository
+REPO_URL=https://github.com/owner/repo
+
+# Polling (in milliseconds)
+POLLING_INTERVAL=300000  # 5 minutes
+CHECK_INTERVAL=15        # Check last 15 minutes
+
+# Logging
+LOG_LEVEL=info
+```
+
+### Required API Keys
+
+**OpenAI API Key:**
+1. Go to https://platform.openai.com/api-keys
+2. Create new secret key
+3. Copy key (starts with `sk-`)
+
+**SigNoz:**
+- Must be running on localhost:3301 (or your configured URL)
+- Ensure your app is sending telemetry to SigNoz
+
+## Usage
+
+### Prerequisites
+
+1. **SigNoz must be running:**
+```bash
+cd signoz/deploy
+./install.sh
+```
+
+2. **GitHub Service must be running:**
+```bash
+cd github-service
+npm start
+```
+
+3. **Your app must be running and sending telemetry:**
+```bash
+cd app
+npm start
+```
+
+### Start AI Analyzer:
+```bash
+npm start
+```
+
+### Development mode:
+```bash
+npm run dev
+```
+
+## What Gets Analyzed
+
+The service analyzes:
+- **Error logs** - All ERROR level logs from your service
+- **Error patterns** - Recurring errors and their frequency
+- **Service metrics** - P50, P95, P99 latency, error rates
+- **Time patterns** - When errors occur, frequency
+- **Affected endpoints** - Which APIs are failing
+
+## AI Analysis Process
+
+1. **Fetch Data**
+   - Pulls error logs from last 15 minutes
+   - Fetches service metrics
+
+2. **AI Analysis**
+   - OpenAI GPT-4 analyzes logs and metrics
+   - Determines severity: critical, high, medium, low
+   - Identifies error patterns
+   - Suggests root cause
+   - Recommends actions
+
+3. **Issue Decision**
+   - Creates issue if severity ≥ medium
+   - Skips if similar issue processed recently
+   - Checks for duplicates via GitHub Service
+
+4. **Issue Creation**
+   - Generates detailed issue body
+   - Includes logs, metrics, AI analysis
+   - Calls GitHub Service API
+   - Triggers n8n workflow (via GitHub webhook)
+
+## Issue Severity Levels
+
+| Severity | Description | Action |
+|----------|-------------|--------|
+| **Critical** | Service down, major outage | Immediate issue |
+| **High** | Frequent errors, degraded performance | Create issue |
+| **Medium** | Recurring errors, minor impact | Create issue |
+| **Low** | Isolated errors, no pattern | Log only, no issue |
+
+## Example AI Analysis
+
+Input (logs):
+```
+[ERROR] Database connection timeout
+[ERROR] Failed to fetch user data
+[ERROR] Database connection timeout
+[ERROR] API response timeout
+```
+
+AI Output:
+```json
+{
+  "shouldCreateIssue": true,
+  "severity": "high",
+  "issueTitle": "Database Connection Timeouts Affecting User API",
+  "errorPattern": "database-timeout",
+  "affectedEndpoints": ["/users", "/api/user-data"],
+  "rootCauseHypothesis": "Database connection pool exhausted",
+  "recommendation": "Check database connections, increase pool size"
+}
+```
+
+## GitHub Issue Example
+
+Created issues look like:
+
+```markdown
+# [HIGH] Database Connection Timeouts Affecting User API
+
+## Problem Description
+Multiple database timeout errors detected affecting user-related endpoints...
+
+## Impact Assessment
+- Severity: High
+- Affected Endpoints: /users, /api/user-data
+- Error Rate: 15 errors in 15 minutes
+
+## Error Details
+[2024-11-26 12:00:00] ERROR | Database connection timeout
+[2024-11-26 12:01:30] ERROR | Failed to fetch user data
+...
+
+## Root Cause Hypothesis
+Database connection pool appears to be exhausted...
+
+## Recommended Actions
+1. Check database connection pool configuration
+2. Review slow queries
+3. Monitor database performance metrics
+
+---
+**Auto-generated by AI Analyzer**
+- Severity: high
+- Priority: P1
+- Service: rightstep-app
+```
+
+## Monitoring & Logs
+
+The service logs all activities:
+
+```
+2024-11-26 12:00:00 info: AI Analyzer Service starting...
+2024-11-26 12:00:01 info: GitHub Service is healthy
+2024-11-26 12:00:01 info: Starting monitoring cycle...
+2024-11-26 12:00:02 info: Fetching error logs from SigNoz...
+2024-11-26 12:00:03 info: Found 15 error logs. Analyzing...
+2024-11-26 12:00:10 info: AI Analysis complete {"severity":"high"}
+2024-11-26 12:00:12 info: GitHub issue created successfully!
+```
+
+## Configuration Options
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `POLLING_INTERVAL` | Time between checks (ms) | 300000 (5 min) |
+| `CHECK_INTERVAL` | Minutes of logs to check | 15 |
+| `SERVICE_NAME` | Service to monitor | rightstep-app |
+| `AI_MODEL` | OpenAI model | gpt-4-turbo-preview |
+| `SIGNOZ_URL` | SigNoz API URL | http://localhost:3301 |
+| `GITHUB_SERVICE_URL` | GitHub Service URL | http://localhost:3001 |
+
+## Duplicate Prevention
+
+The service prevents duplicate issues:
+- Caches processed issues for 1 hour
+- Checks GitHub for similar open issues
+- Uses error pattern fingerprinting
+
+## Error Handling
+
+- Retries failed cycles after 60 seconds
+- Continues running even if one cycle fails
+- Validates configuration on startup
+- Checks GitHub Service health before starting
+
+## Troubleshooting
+
+**"GitHub Service is not accessible"**
+- Ensure GitHub Service is running on port 3001
+- Check GITHUB_SERVICE_URL in .env
+
+**"No error logs found"**
+- Verify your app is running and sending logs
+- Check SERVICE_NAME matches your app
+- Generate test errors in your app
+
+**"OpenAI API error"**
+- Verify OPENAI_API_KEY is valid
+- Check API quota/billing
+- Try gpt-3.5-turbo if rate limited
+
+**"SigNoz connection failed"**
+- Ensure SigNoz is running
+- Check SIGNOZ_URL
+- Verify SigNoz API is accessible
+
+## Architecture
+
+### Components
+
+1. **SigNozClient** (`signoz-client.js`)
+   - Fetches logs, traces, metrics from SigNoz
+   - Handles SigNoz API communication
+
+2. **AIAnalyzer** (`ai-analyzer.js`)
+   - OpenAI GPT-4 integration
+   - Log analysis and issue detection
+   - Issue body generation
+
+3. **Main Service** (`index.js`)
+   - Polling loop
+   - Orchestrates analysis
+   - Calls GitHub Service API
+
+## Performance
+
+- Polling interval: 5 minutes (configurable)
+- Each cycle takes ~10-30 seconds
+- OpenAI API calls: ~2-3 per cycle
+- Memory usage: ~50-100 MB
+- CPU usage: Low (mostly idle between cycles)
+
+## Production Deployment
+
+### Using PM2
+
+```bash
+npm install -g pm2
+pm2 start index.js --name ai-analyzer
+pm2 save
+pm2 startup
+```
+
+### Using Docker
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install --production
+COPY . .
+CMD ["node", "index.js"]
+```
+
+### Environment Variables in Production
+
+Use secrets management:
+- AWS Secrets Manager
+- Kubernetes Secrets
+- HashiCorp Vault
+- GitHub Secrets (for CI/CD)
+
+## Testing
+
+### Generate test errors in your app:
+
+```bash
+# Terminal 1: Start app
+cd app
+npm start
+
+# Terminal 2: Generate errors
+for i in {1..10}; do
+  curl http://localhost:3000/error
+  sleep 1
+done
+```
+
+Wait 5-15 minutes, check GitHub for new issues!
+
+## Cost Considerations
+
+**OpenAI API:**
+- GPT-4: ~$0.03 per 1K tokens
+- Average per cycle: ~2K tokens input + 1K output
+- Cost per cycle: ~$0.09
+- Daily (288 cycles): ~$26
+- **Recommendation:** Use GPT-3.5-turbo for lower cost (~$0.002 per cycle)
+
+## License
+
+MIT

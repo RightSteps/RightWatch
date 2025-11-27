@@ -1,0 +1,232 @@
+{
+  "name": "RightWatch - AI Issue Solver",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "events": [
+          "issues"
+        ]
+      },
+      "name": "GitHub Issues Trigger",
+      "type": "n8n-nodes-base.githubTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.action }}",
+              "value2": "opened"
+            }
+          ]
+        }
+      },
+      "name": "Issue Opened?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "number": [
+            {
+              "name": "issueNumber",
+              "value": "={{ $json.issue.number }}"
+            }
+          ],
+          "string": [
+            {
+              "name": "issueTitle",
+              "value": "={{ $json.issue.title }}"
+            },
+            {
+              "name": "issueBody",
+              "value": "={{ $json.issue.body }}"
+            },
+            {
+              "name": "repoOwner",
+              "value": "={{ $json.repository.owner.login }}"
+            },
+            {
+              "name": "repoName",
+              "value": "={{ $json.repository.name }}"
+            },
+            {
+              "name": "issueUrl",
+              "value": "={{ $json.issue.html_url }}"
+            }
+          ]
+        }
+      },
+      "name": "Extract Issue Info",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        680,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "=https://api.github.com/repos/{{ $json.repoOwner }}/{{ $json.repoName }}/contents",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "options": {}
+      },
+      "name": "Fetch Repository Structure",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o-mini",
+        "messages": {
+          "messageValues": [
+            {
+              "role": "system",
+              "message": "You are an expert DevOps engineer and software architect specializing in Node.js, Express, OpenTelemetry, and production incident response. You analyze production issues and provide actionable, detailed solutions with code examples."
+            },
+            {
+              "role": "user",
+              "message": "=Analyze this production issue detected by RightWatch AI monitoring system:\n\n**Issue Title:**\n{{ $node[\"Extract Issue Info\"].json.issueTitle }}\n\n**Issue Description:**\n{{ $node[\"Extract Issue Info\"].json.issueBody }}\n\n**Repository:** {{ $node[\"Extract Issue Info\"].json.repoOwner }}/{{ $node[\"Extract Issue Info\"].json.repoName }}\n\n**Repository Structure:**\n{{ $json }}\n\nProvide a comprehensive solution following this structure:\n\n## 🔍 Root Cause Analysis\n- What is causing this issue?\n- Why is it happening?\n- What are the underlying technical factors?\n\n## 💥 Impact Assessment\n- Severity level (Critical/High/Medium/Low)\n- Affected functionality and endpoints\n- Potential user impact\n- Business consequences\n\n## 🚑 Immediate Mitigation\nQuick actions to reduce impact right now:\n```bash\n# Commands or configuration changes\n```\n\n## 🔧 Proper Solution\nLong-term fix for root cause:\n```javascript\n// File: path/to/file.js\n// Specific code changes needed\n```\n\n## ✅ Testing Checklist\n- [ ] Test case 1\n- [ ] Test case 2\n- [ ] Verify fix in development\n- [ ] Monitor metrics after deployment\n\n## 📊 Monitoring Recommendations\nWhat to watch after deploying the fix:\n- Key metrics to monitor\n- Warning signs of regression\n- Success indicators\n\n## 🔮 Prevention Strategy\nHow to prevent this issue in the future:\n- Code improvements\n- Configuration changes\n- Monitoring enhancements\n\nBe specific, actionable, and include actual code examples with file paths."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 3000
+        }
+      },
+      "name": "AI Solution Analysis",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "comment",
+              "value": "=## 🤖 AI-Generated Solution by RightWatch\n\n{{ $json.message.content }}\n\n---\n\n### 📋 Solution Details\n- **AI Model:** GPT-4o-mini\n- **Generated:** {{ $now.toISO() }}\n- **Workflow:** RightWatch Automated Analysis\n- **Issue:** #{{ $node[\"Extract Issue Info\"].json.issueNumber }}\n\n### ⚡ Next Steps\n1. **Review** the suggested solution carefully\n2. **Test** in a development environment first\n3. **Implement** the fix following the code examples\n4. **Monitor** the metrics mentioned above\n5. **Close** this issue after verification\n\n### 🔗 Resources\n- [OpenTelemetry Documentation](https://opentelemetry.io/docs/)\n- [SigNoz Troubleshooting](https://signoz.io/docs/)\n- [Node.js Best Practices](https://github.com/goldbergyoni/nodebestpractices)\n\n---\n\n*🤖 This solution was automatically generated by RightWatch AI. Please review and test before implementing in production.*\n\n*Powered by [RightWatch](https://github.com/RightSteps/RightWatch) - AI-Powered Application Intelligence Platform*"
+            }
+          ]
+        }
+      },
+      "name": "Format Solution Comment",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        1340,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "=https://api.github.com/repos/{{ $node[\"Extract Issue Info\"].json.repoOwner }}/{{ $node[\"Extract Issue Info\"].json.repoName }}/issues/{{ $node[\"Extract Issue Info\"].json.issueNumber }}/comments",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={ \"body\": \"{{ $json.comment.replace(/\"/g, '\\\\\"') }}\" }",
+        "options": {}
+      },
+      "name": "Post Solution to GitHub",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "GitHub Issues Trigger": {
+      "main": [
+        [
+          {
+            "node": "Issue Opened?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Issue Opened?": {
+      "main": [
+        [
+          {
+            "node": "Extract Issue Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Issue Info": {
+      "main": [
+        [
+          {
+            "node": "Fetch Repository Structure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Repository Structure": {
+      "main": [
+        [
+          {
+            "node": "AI Solution Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Solution Analysis": {
+      "main": [
+        [
+          {
+            "node": "Format Solution Comment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Solution Comment": {
+      "main": [
+        [
+          {
+            "node": "Post Solution to GitHub",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "staticData": null,
+  "tags": []
+}
